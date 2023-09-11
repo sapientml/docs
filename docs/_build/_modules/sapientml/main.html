@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>sapientml.main &#8212; sapientml 0.4.3 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=4f649999" />
+    <link rel="stylesheet" type="text/css" href="../../_static/alabaster.css?v=039e1c02" />
+    <script src="../../_static/documentation_options.js?v=5bfaad31"></script>
+    <script src="../../_static/doctools.js?v=888ff710"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for sapientml.main</h1><div class="highlight"><pre>
+<span></span><span class="c1"># Copyright 2023 The SapientML Authors</span>
+<span class="c1">#</span>
+<span class="c1"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c1"># you may not use this file except in compliance with the License.</span>
+<span class="c1"># You may obtain a copy of the License at</span>
+<span class="c1">#</span>
+<span class="c1">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c1">#</span>
+<span class="c1"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c1"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c1"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c1"># See the License for the specific language governing permissions and</span>
+<span class="c1"># limitations under the License.</span>
+
+<span class="kn">import</span> <span class="nn">pickle</span>
+
+<span class="c1"># from msilib.schema import Error</span>
+<span class="kn">from</span> <span class="nn">importlib.metadata</span> <span class="kn">import</span> <span class="n">entry_points</span>
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Union</span>
+
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">from</span> <span class="nn">sapientml.model</span> <span class="kn">import</span> <span class="n">GeneratedModel</span>
+<span class="kn">from</span> <span class="nn">sapientml.suggestion</span> <span class="kn">import</span> <span class="n">SapientMLSuggestion</span>
+
+<span class="kn">from</span> <span class="nn">.macros</span> <span class="kn">import</span> <span class="n">Metric</span>
+<span class="kn">from</span> <span class="nn">.params</span> <span class="kn">import</span> <span class="n">Dataset</span><span class="p">,</span> <span class="n">Task</span>
+<span class="kn">from</span> <span class="nn">.util.logging</span> <span class="kn">import</span> <span class="n">setup_logger</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">setup_logger</span><span class="p">()</span>
+
+<span class="n">DEFAULT_OUTPUT_DIR</span> <span class="o">=</span> <span class="s2">&quot;./outputs&quot;</span>
+
+
+<span class="k">def</span> <span class="nf">_check_stratification</span><span class="p">(</span>
+    <span class="n">full_dataset</span><span class="p">,</span>
+    <span class="n">target_columns</span><span class="p">,</span>
+    <span class="n">task_type</span><span class="p">,</span>
+    <span class="n">adaptation_metric</span><span class="p">,</span>
+    <span class="n">split_stratification</span><span class="p">,</span>
+    <span class="n">stratify_threshold</span><span class="p">,</span>
+<span class="p">):</span>
+    <span class="n">base_threshold</span> <span class="o">=</span> <span class="mf">0.2</span>
+    <span class="n">temp_res</span> <span class="o">=</span> <span class="n">full_dataset</span><span class="p">[</span><span class="n">target_columns</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span><span class="o">.</span><span class="n">value_counts</span><span class="p">()</span>
+    <span class="n">min_value</span> <span class="o">=</span> <span class="n">temp_res</span><span class="o">.</span><span class="n">min</span><span class="p">()</span>
+    <span class="n">min_value_ratio</span> <span class="o">=</span> <span class="n">min_value</span> <span class="o">/</span> <span class="n">temp_res</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+    <span class="n">ratio_threshold</span> <span class="o">=</span> <span class="n">base_threshold</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">temp_res</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">task_type</span> <span class="o">==</span> <span class="s2">&quot;classification&quot;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">min_value</span> <span class="o">&lt;</span> <span class="n">stratify_threshold</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">adaptation_metric</span> <span class="o">==</span> <span class="s2">&quot;LogLoss&quot;</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Target value </span><span class="si">{</span><span class="n">temp_res</span><span class="o">.</span><span class="n">idxmin</span><span class="p">()</span><span class="si">}</span><span class="s2"> appears only </span><span class="si">{</span><span class="n">min_value</span><span class="si">}</span><span class="s2"> times, the input data cannot be split for LogLoss metric. Please review the target column or set another adaptation_metric&quot;</span>
+                <span class="p">)</span>
+            <span class="k">elif</span> <span class="n">split_stratification</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;split_stratification=True, but the input data cannot be split using stratification because target value </span><span class="si">{</span><span class="n">temp_res</span><span class="o">.</span><span class="n">idxmin</span><span class="p">()</span><span class="si">}</span><span class="s2"> appears only </span><span class="si">{</span><span class="n">min_value</span><span class="si">}</span><span class="s2"> times. Please set split_stratification as False&quot;</span>
+                <span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">elif</span> <span class="n">min_value_ratio</span> <span class="o">&lt;</span> <span class="n">ratio_threshold</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">split_stratification</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">True</span>
+            <span class="k">elif</span> <span class="ow">not</span> <span class="n">split_stratification</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s2">&quot;split_stratification is set False, but setting True is recommended because the target is imbalance.&quot;</span>
+                <span class="p">)</span>
+            <span class="k">return</span> <span class="n">split_stratification</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">split_stratification</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">False</span>
+            <span class="k">return</span> <span class="n">split_stratification</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">False</span>
+
+
+<div class="viewcode-block" id="SapientML">
+<a class="viewcode-back" href="../../sapientml.html#sapientml.main.SapientML">[docs]</a>
+<span class="k">class</span> <span class="nc">SapientML</span><span class="p">:</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="c1"># Dataset</span>
+        <span class="n">target_columns</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+        <span class="c1"># Task</span>
+        <span class="n">task_type</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;classification&quot;</span><span class="p">,</span> <span class="s2">&quot;regression&quot;</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">adaptation_metric</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">split_method</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;random&quot;</span><span class="p">,</span> <span class="s2">&quot;time&quot;</span><span class="p">,</span> <span class="s2">&quot;group&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;random&quot;</span><span class="p">,</span>
+        <span class="n">split_seed</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">17</span><span class="p">,</span>
+        <span class="n">split_train_size</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.75</span><span class="p">,</span>
+        <span class="n">split_column_name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">time_split_num</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">5</span><span class="p">,</span>
+        <span class="n">time_split_index</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">4</span><span class="p">,</span>
+        <span class="n">split_stratification</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">bool</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">model_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;sapientml&quot;</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        The constructor of SapientML.</span>
+
+<span class="sd">        You can pass all the keyword arguments for configurations of PipelineGenerators and CodeBlockGenerators from plugins.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        target_columns: list[str]</span>
+<span class="sd">            Names of target columns</span>
+<span class="sd">        task_type: &#39;classification&#39; or &#39;regression&#39;</span>
+<span class="sd">            Specify classification or regression.</span>
+<span class="sd">        adaptation_metric: str</span>
+<span class="sd">            Metric for evaluation.</span>
+<span class="sd">            Classification: &#39;f1&#39;, &#39;auc&#39;, &#39;ROC_AUC&#39;, &#39;accuracy&#39;, &#39;Gini&#39;, &#39;LogLoss&#39;,</span>
+<span class="sd">            &#39;MCC&#39;(Matthews correlation coefficient), &#39;QWK&#39;(Quadratic weighted kappa).</span>
+<span class="sd">            Regression: &#39;r2&#39;, &#39;RMSLE&#39;, &#39;RMSE&#39;, &#39;MAE&#39;.</span>
+<span class="sd">        split_method: &#39;random&#39;, &#39;time&#39;, or &#39;group&#39;</span>
+<span class="sd">            Method of train-test split.</span>
+<span class="sd">            &#39;random&#39; uses random split.</span>
+<span class="sd">            &#39;time&#39; requires &#39;split_column_name&#39;.</span>
+<span class="sd">            This sorts the data rows based on the column, and then splits data.</span>
+<span class="sd">            &#39;group&#39; requires &#39;split_column_name&#39;.</span>
+<span class="sd">            This split the data so as not to split rows with the same value of &#39;split_column_name&#39;</span>
+<span class="sd">            into train and test data.</span>
+<span class="sd">            Currently, this option is not valid in the hyperparameter tuning.</span>
+<span class="sd">            Don&#39;t set time or group when hyperparameter_tuning=True.</span>
+<span class="sd">        split_seed: int</span>
+<span class="sd">            Random seed for train-test split.</span>
+<span class="sd">            Ignored when split_method=&#39;time&#39;.</span>
+<span class="sd">        split_train_size: float</span>
+<span class="sd">            The ratio of training size to input data.</span>
+<span class="sd">            Ignored when split_method=&#39;time&#39;.</span>
+<span class="sd">        split_column_name: str</span>
+<span class="sd">            Name of the column used to split.</span>
+<span class="sd">            Ignored when split_method=&#39;random&#39;</span>
+<span class="sd">        time_split_num: int</span>
+<span class="sd">            Passed to TimeSeriesSplit&#39;s n_splits.</span>
+<span class="sd">            Valid only when split_method=&#39;time&#39;.</span>
+<span class="sd">        time_split_index: int</span>
+<span class="sd">            The index of the split from TimeSeriesSplit.</span>
+<span class="sd">            Valid only when split_method=&#39;time&#39;.</span>
+<span class="sd">        split_stratification: bool</span>
+<span class="sd">            To perform stratification in train-test split.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">params</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;target_columns&quot;</span><span class="p">:</span> <span class="n">target_columns</span><span class="p">,</span>
+            <span class="s2">&quot;task_type&quot;</span><span class="p">:</span> <span class="n">task_type</span><span class="p">,</span>
+            <span class="s2">&quot;split_method&quot;</span><span class="p">:</span> <span class="n">split_method</span><span class="p">,</span>
+            <span class="s2">&quot;split_seed&quot;</span><span class="p">:</span> <span class="n">split_seed</span><span class="p">,</span>
+            <span class="s2">&quot;split_train_size&quot;</span><span class="p">:</span> <span class="n">split_train_size</span><span class="p">,</span>
+            <span class="s2">&quot;split_column_name&quot;</span><span class="p">:</span> <span class="n">split_column_name</span><span class="p">,</span>
+            <span class="s2">&quot;time_split_num&quot;</span><span class="p">:</span> <span class="n">time_split_num</span><span class="p">,</span>
+            <span class="s2">&quot;time_split_index&quot;</span><span class="p">:</span> <span class="n">time_split_index</span><span class="p">,</span>
+            <span class="s2">&quot;adaptation_metric&quot;</span><span class="p">:</span> <span class="n">adaptation_metric</span><span class="p">,</span>
+            <span class="s2">&quot;split_stratification&quot;</span><span class="p">:</span> <span class="n">split_stratification</span><span class="p">,</span>
+            <span class="s2">&quot;model_type&quot;</span><span class="p">:</span> <span class="n">model_type</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+        <span class="p">}</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">task</span> <span class="o">=</span> <span class="n">Task</span><span class="p">(</span>
+            <span class="n">target_columns</span><span class="o">=</span><span class="n">target_columns</span><span class="p">,</span>
+            <span class="n">task_type</span><span class="o">=</span><span class="n">task_type</span><span class="p">,</span>
+            <span class="n">split_method</span><span class="o">=</span><span class="n">split_method</span><span class="p">,</span>
+            <span class="n">split_seed</span><span class="o">=</span><span class="n">split_seed</span><span class="p">,</span>
+            <span class="n">split_train_size</span><span class="o">=</span><span class="n">split_train_size</span><span class="p">,</span>
+            <span class="n">split_column_name</span><span class="o">=</span><span class="n">split_column_name</span><span class="p">,</span>
+            <span class="n">time_split_num</span><span class="o">=</span><span class="n">time_split_num</span><span class="p">,</span>
+            <span class="n">time_split_index</span><span class="o">=</span><span class="n">time_split_index</span><span class="p">,</span>
+            <span class="n">adaptation_metric</span><span class="o">=</span><span class="n">adaptation_metric</span><span class="p">,</span>
+            <span class="n">split_stratification</span><span class="o">=</span><span class="n">split_stratification</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">eps_generator</span> <span class="o">=</span> <span class="n">entry_points</span><span class="p">(</span><span class="n">group</span><span class="o">=</span><span class="s2">&quot;sapientml.pipeline_generator&quot;</span><span class="p">)</span>
+        <span class="n">eps_config</span> <span class="o">=</span> <span class="n">entry_points</span><span class="p">(</span><span class="n">group</span><span class="o">=</span><span class="s2">&quot;sapientml.config&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">eps_generator</span><span class="p">[</span><span class="n">model_type</span><span class="p">]</span> <span class="ow">and</span> <span class="n">eps_config</span><span class="p">[</span><span class="n">model_type</span><span class="p">]:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_Generator</span> <span class="o">=</span> <span class="n">eps_generator</span><span class="p">[</span><span class="n">model_type</span><span class="p">]</span><span class="o">.</span><span class="n">load</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_Config</span> <span class="o">=</span> <span class="n">eps_config</span><span class="p">[</span><span class="n">model_type</span><span class="p">]</span><span class="o">.</span><span class="n">load</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Model &#39;</span><span class="si">{</span><span class="n">model_type</span><span class="si">}</span><span class="s2">&#39; is invalid.&quot;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">model_type</span> <span class="o">=</span> <span class="n">model_type</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">generator</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_Generator</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">generator</span><span class="o">.</span><span class="n">config</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">postinit</span><span class="p">()</span>
+
+<div class="viewcode-block" id="SapientML.from_pretrained">
+<a class="viewcode-back" href="../../sapientml.html#sapientml.main.SapientML.from_pretrained">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">from_pretrained</span><span class="p">(</span><span class="n">model</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        The factory method of SapientML from a pretrained model built by source code previously generated by SapientML.</span>
+
+<span class="sd">        `model` must be either pickle filename, pickle bytes-like object, or deserialized object</span>
+
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        model: str, bytes-like object, or GeneratedModel</span>
+<span class="sd">            A pretrained model built by source code previously generated by SapientML.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        sml: SapientML</span>
+<span class="sd">            a new SapientML instance loaded from the pretrained model.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">GeneratedModel</span><span class="p">):</span>
+                <span class="k">pass</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+                    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="s2">&quot;rb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+                        <span class="n">model</span> <span class="o">=</span> <span class="n">pickle</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">model</span> <span class="o">=</span> <span class="n">pickle</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">GeneratedModel</span><span class="p">):</span>
+                    <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;model is not an instance of GeneratedModel&quot;</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;model must be either pickle filename, pickle bytes-like object, or deserialized object&quot;</span>
+            <span class="p">)</span> <span class="kn">from</span> <span class="nn">e</span>
+        <span class="n">sml</span> <span class="o">=</span> <span class="n">SapientML</span><span class="p">(</span><span class="o">**</span><span class="n">model</span><span class="o">.</span><span class="n">params</span><span class="p">)</span>
+        <span class="n">sml</span><span class="o">.</span><span class="n">model</span> <span class="o">=</span> <span class="n">model</span>
+        <span class="k">return</span> <span class="n">sml</span></div>
+
+
+<div class="viewcode-block" id="SapientML.fit">
+<a class="viewcode-back" href="../../sapientml.html#sapientml.main.SapientML.fit">[docs]</a>
+    <span class="k">def</span> <span class="nf">fit</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">training_data</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span>
+        <span class="n">validation_data</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">test_data</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">save_datasets_format</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;csv&quot;</span><span class="p">,</span> <span class="s2">&quot;pickle&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;pickle&quot;</span><span class="p">,</span>
+        <span class="n">csv_encoding</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;UTF-8&quot;</span><span class="p">,</span> <span class="s2">&quot;SJIS&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;UTF-8&quot;</span><span class="p">,</span>
+        <span class="n">csv_delimiter</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;,&quot;</span><span class="p">,</span>
+        <span class="n">ignore_columns</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">output_dir</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">DEFAULT_OUTPUT_DIR</span><span class="p">,</span>
+        <span class="n">codegen_only</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Generate ML scripts for input data.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        training_data: pandas.DataFrame or str</span>
+<span class="sd">            Training dataframe.</span>
+<span class="sd">            When str, this is regarded as a file path.</span>
+<span class="sd">        validation_data: pandas.DataFrame, str or None</span>
+<span class="sd">            Validation dataframe.</span>
+<span class="sd">            When str, this is regarded as file paths.</span>
+<span class="sd">            When None, validation data is extracted from training data by split.</span>
+<span class="sd">        test_data: pandas.DataFrame, str, or None</span>
+<span class="sd">            Test dataframes.</span>
+<span class="sd">            When str, they are regarded as file paths.</span>
+<span class="sd">            When None, test data is extracted from training data by split.</span>
+<span class="sd">        save_datasets_format: &#39;csv&#39; or &#39;pickle&#39;</span>
+<span class="sd">            Data format when the input dataframes are written to files.</span>
+<span class="sd">            Ignored when all inputs are specified as file path.</span>
+<span class="sd">        csv_encoding: &#39;UTF-8&#39; or &#39;SJIS&#39;</span>
+<span class="sd">            Encoding method when csv files are involved.</span>
+<span class="sd">            Ignored when only pickle files are involved.</span>
+<span class="sd">        csv_delimiter: str</span>
+<span class="sd">            Delimiter to read csv files</span>
+<span class="sd">        ignore_columns: list[str]</span>
+<span class="sd">            Column names which must not be used and must be dropped.</span>
+<span class="sd">        output_dir: str</span>
+<span class="sd">            Output dir</span>
+<span class="sd">        codegen_only: bool</span>
+<span class="sd">            Do not conduct fit() of GeneratedModel if True</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        self: SapientML</span>
+<span class="sd">            SapientML object itself</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="n">ignore_columns</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">ignore_columns</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Loading dataset...&quot;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">output_dir</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_dir</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">dataset</span> <span class="o">=</span> <span class="n">Dataset</span><span class="p">(</span>
+            <span class="n">training_data</span><span class="o">=</span><span class="n">training_data</span><span class="p">,</span>
+            <span class="n">validation_data</span><span class="o">=</span><span class="n">validation_data</span><span class="p">,</span>
+            <span class="n">test_data</span><span class="o">=</span><span class="n">test_data</span><span class="p">,</span>
+            <span class="n">csv_encoding</span><span class="o">=</span><span class="n">csv_encoding</span><span class="p">,</span>
+            <span class="n">csv_delimiter</span><span class="o">=</span><span class="n">csv_delimiter</span><span class="p">,</span>
+            <span class="n">save_datasets_format</span><span class="o">=</span><span class="n">save_datasets_format</span><span class="p">,</span>
+            <span class="n">ignore_columns</span><span class="o">=</span><span class="n">ignore_columns</span><span class="p">,</span>
+            <span class="n">output_dir</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">output_dir</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">task</span><span class="o">.</span><span class="n">task_type</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">task</span><span class="o">.</span><span class="n">task_type</span> <span class="o">=</span> <span class="n">SapientMLSuggestion</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">task</span><span class="o">.</span><span class="n">target_columns</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">training_dataframe</span>
+            <span class="p">)</span><span class="o">.</span><span class="n">suggest_task</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">task</span><span class="o">.</span><span class="n">adaptation_metric</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">task</span><span class="o">.</span><span class="n">task_type</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">task</span><span class="o">.</span><span class="n">task_type</span> <span class="o">==</span> <span class="s2">&quot;regression&quot;</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Metric is not specified. Use &#39;r2&#39; by default.&quot;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Metric is not specified. Use &#39;f1&#39; by default.&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">task</span><span class="o">.</span><span class="n">adaptation_metric</span> <span class="o">=</span> <span class="n">Metric</span><span class="o">.</span><span class="n">get_default_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">task</span><span class="o">.</span><span class="n">task_type</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">task</span><span class="o">.</span><span class="n">adaptation_metric</span> <span class="o">=</span> <span class="n">Metric</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">task</span><span class="o">.</span><span class="n">adaptation_metric</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">Metric</span><span class="o">.</span><span class="n">metric_match_task_type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">task</span><span class="o">.</span><span class="n">adaptation_metric</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">task</span><span class="o">.</span><span class="n">task_type</span><span class="p">):</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">task</span><span class="o">.</span><span class="n">adaptation_metric</span><span class="si">}</span><span class="s2"> is not a metric for </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">task</span><span class="o">.</span><span class="n">task_type</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">task</span><span class="o">.</span><span class="n">task_type</span> <span class="o">==</span> <span class="s2">&quot;classification&quot;</span><span class="p">:</span>
+            <span class="n">is_multioutput</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">task</span><span class="o">.</span><span class="n">target_columns</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">is_multioutput</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="k">for</span> <span class="n">column</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">task</span><span class="o">.</span><span class="n">target_columns</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">training_data</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">training_data</span><span class="p">[</span><span class="n">column</span><span class="p">]</span><span class="o">.</span><span class="n">unique</span><span class="p">())</span> <span class="o">&gt;</span> <span class="mi">2</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">task</span><span class="o">.</span><span class="n">is_multiclass</span> <span class="o">=</span> <span class="kc">True</span>
+
+            <span class="k">if</span> <span class="n">is_multioutput</span><span class="p">:</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">task</span><span class="o">.</span><span class="n">is_multiclass</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">Metric</span><span class="o">.</span><span class="n">metric_support_multiclass_multioutput</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">task</span><span class="o">.</span><span class="n">adaptation_metric</span>
+                <span class="p">):</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">task</span><span class="o">.</span><span class="n">adaptation_metric</span><span class="si">}</span><span class="s2"> does not support Multiclass-Multioutput classification. Execution of candidate script raises an exception.&quot;</span>
+                    <span class="p">)</span>
+                <span class="k">elif</span> <span class="ow">not</span> <span class="n">Metric</span><span class="o">.</span><span class="n">metric_support_multioutput</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">task</span><span class="o">.</span><span class="n">adaptation_metric</span><span class="p">):</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">task</span><span class="o">.</span><span class="n">adaptation_metric</span><span class="si">}</span><span class="s2"> does not support Multioutput (Multilabel) classification. Execution of candidate script raises an exception.&quot;</span>
+                    <span class="p">)</span>
+
+        <span class="n">training_dataframe</span><span class="p">,</span> <span class="n">validation_dataframe</span><span class="p">,</span> <span class="n">test_dataframe</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">get_dataframes</span><span class="p">()</span>
+        <span class="n">stratify_threshold</span> <span class="o">=</span> <span class="mi">3</span>
+        <span class="k">if</span> <span class="n">validation_dataframe</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">stratify_threshold</span> <span class="o">-=</span> <span class="mi">1</span>
+        <span class="k">if</span> <span class="n">test_dataframe</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">stratify_threshold</span> <span class="o">-=</span> <span class="mi">1</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">task</span><span class="o">.</span><span class="n">target_columns</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">task</span><span class="o">.</span><span class="n">split_stratification</span> <span class="o">=</span> <span class="n">_check_stratification</span><span class="p">(</span>
+                <span class="n">training_dataframe</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">task</span><span class="o">.</span><span class="n">target_columns</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">task</span><span class="o">.</span><span class="n">task_type</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">task</span><span class="o">.</span><span class="n">adaptation_metric</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">task</span><span class="o">.</span><span class="n">split_stratification</span><span class="p">,</span>
+                <span class="n">stratify_threshold</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">task</span><span class="o">.</span><span class="n">task_type</span> <span class="o">==</span> <span class="s2">&quot;classification&quot;</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">task</span><span class="o">.</span><span class="n">split_stratification</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Stratification for multiple target columns is not supported.&quot;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">generator</span><span class="o">.</span><span class="n">generate_pipeline</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">task</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">generator</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">output_dir</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">model</span> <span class="o">=</span> <span class="n">GeneratedModel</span><span class="p">(</span>
+            <span class="n">input_dir</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">output_dir</span><span class="p">,</span>
+            <span class="n">save_datasets_format</span><span class="o">=</span><span class="n">save_datasets_format</span><span class="p">,</span>
+            <span class="n">csv_encoding</span><span class="o">=</span><span class="n">csv_encoding</span><span class="p">,</span>
+            <span class="n">csv_delimiter</span><span class="o">=</span><span class="n">csv_delimiter</span><span class="p">,</span>
+            <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">timeout_for_test</span><span class="p">,</span>
+            <span class="n">params</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">codegen_only</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">training_dataframe</span><span class="p">,</span> <span class="n">validation_dataframe</span><span class="p">]))</span>
+
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Done.&quot;</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+
+<div class="viewcode-block" id="SapientML.predict">
+<a class="viewcode-back" href="../../sapientml.html#sapientml.main.SapientML.predict">[docs]</a>
+    <span class="k">def</span> <span class="nf">predict</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">test_data</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Predicts the output of the test_data and store in the prediction_result.csv.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ---------</span>
+<span class="sd">        test_data: pd.DataFrame</span>
+<span class="sd">            Dataframe used for predicting the result.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        result : pd.DataFrame</span>
+<span class="sd">            It returns the prediction_result.csv result in dataframe format.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">test_data</span><span class="p">)</span></div>
+</div>
+
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">sapientml</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../configtest.html">configtest module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../run.html">run module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../run2.html">run2 module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../sapientml.html">sapientml package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tests.html">tests package</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2023, Author.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 7.2.5</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.13</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

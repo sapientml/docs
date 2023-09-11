@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>sapientml.params &#8212; sapientml 0.4.3 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=4f649999" />
+    <link rel="stylesheet" type="text/css" href="../../_static/alabaster.css?v=039e1c02" />
+    <script src="../../_static/documentation_options.js?v=5bfaad31"></script>
+    <script src="../../_static/doctools.js?v=888ff710"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for sapientml.params</h1><div class="highlight"><pre>
+<span></span><span class="c1"># Copyright 2023 The SapientML Authors</span>
+<span class="c1">#</span>
+<span class="c1"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c1"># you may not use this file except in compliance with the License.</span>
+<span class="c1"># You may obtain a copy of the License at</span>
+<span class="c1">#</span>
+<span class="c1">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c1">#</span>
+<span class="c1"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c1"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c1"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c1"># See the License for the specific language governing permissions and</span>
+<span class="c1"># limitations under the License.</span>
+
+<span class="kn">import</span> <span class="nn">warnings</span>
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">List</span><span class="p">,</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Union</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">from</span> <span class="nn">pydantic</span> <span class="kn">import</span> <span class="n">BaseModel</span><span class="p">,</span> <span class="n">field_validator</span>
+
+<span class="kn">from</span> <span class="nn">.macros</span> <span class="kn">import</span> <span class="n">Metric</span>
+<span class="kn">from</span> <span class="nn">.util.logging</span> <span class="kn">import</span> <span class="n">setup_logger</span>
+
+<span class="n">MAX_NUM_OF_COLUMNS</span> <span class="o">=</span> <span class="mi">10000000</span>
+<span class="n">MAX_PATH_LENGTH</span> <span class="o">=</span> <span class="mi">1000</span>
+<span class="n">MAX_SEED</span> <span class="o">=</span> <span class="mi">2</span><span class="o">**</span><span class="mi">32</span> <span class="o">-</span> <span class="mi">1</span>
+<span class="n">MAX_COLUMN_NAME_LENGTH</span> <span class="o">=</span> <span class="mi">1000</span>
+<span class="n">MAX_TIME_SPLIT_NUM</span> <span class="o">=</span> <span class="mi">10000</span>
+<span class="n">MAX_TIME_SPLIT_INDEX</span> <span class="o">=</span> <span class="mi">10000</span>
+<span class="n">MAX_N_MODELS</span> <span class="o">=</span> <span class="mi">30</span>
+<span class="n">DEFAULT_OUTPUT_DIR</span> <span class="o">=</span> <span class="s2">&quot;./outputs&quot;</span>
+<span class="n">INITIAL_TIMEOUT</span> <span class="o">=</span> <span class="mi">600</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">setup_logger</span><span class="p">()</span>
+
+
+<span class="k">def</span> <span class="nf">_read_file</span><span class="p">(</span><span class="n">filepath</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">csv_encoding</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">csv_delimiter</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">filepath</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;.pkl&quot;</span><span class="p">):</span>
+        <span class="n">res_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_pickle</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">res_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">filepath</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="n">csv_encoding</span><span class="p">,</span> <span class="n">delimiter</span><span class="o">=</span><span class="n">csv_delimiter</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">res_df</span>
+
+
+<div class="viewcode-block" id="save_file">
+<a class="viewcode-back" href="../../sapientml.html#sapientml.params.save_file">[docs]</a>
+<span class="k">def</span> <span class="nf">save_file</span><span class="p">(</span><span class="n">dataframe</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">filepath</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">csv_encoding</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">csv_delimiter</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Saving dataframe to pickle or csv files</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    dataframe : pd.DataFrame</span>
+<span class="sd">        The data to output</span>
+<span class="sd">    filepath : str</span>
+<span class="sd">        The path of output file</span>
+<span class="sd">    csv_encoding : &#39;UTF-8&#39; or &#39;SJIS&#39;</span>
+<span class="sd">        Encoding method when csv files are involved.</span>
+<span class="sd">        Ignored when only pickle files are involved.</span>
+<span class="sd">    csv_delimiter : str</span>
+<span class="sd">        Delimiter to read csv files</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">filepath</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;.pkl&quot;</span><span class="p">):</span>
+        <span class="n">dataframe</span><span class="o">.</span><span class="n">to_pickle</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">dataframe</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="n">filepath</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="n">csv_encoding</span><span class="p">,</span> <span class="n">sep</span><span class="o">=</span><span class="n">csv_delimiter</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+
+
+
+<span class="k">def</span> <span class="nf">_is_strnum_column</span><span class="p">(</span><span class="n">c</span><span class="p">):</span>
+    <span class="n">c2</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">c</span><span class="o">.</span><span class="n">notnull</span><span class="p">()]</span>
+    <span class="n">c2</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">to_numeric</span><span class="p">(</span><span class="n">c2</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s2">&quot;coerce&quot;</span><span class="p">)</span>
+    <span class="n">ratio</span> <span class="o">=</span> <span class="n">c2</span><span class="o">.</span><span class="n">notnull</span><span class="p">()</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">/</span> <span class="n">c2</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">ratio</span> <span class="o">&gt;</span> <span class="mf">0.9</span>
+
+
+<span class="k">def</span> <span class="nf">_confirm_mixed_type</span><span class="p">(</span><span class="n">df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+    <span class="n">mixed_df_cols</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">df_col</span> <span class="ow">in</span> <span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+        <span class="n">df_per_col</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="n">df_col</span><span class="p">]</span><span class="o">.</span><span class="n">replace</span><span class="p">([</span><span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">)</span>
+        <span class="n">df_per_col2</span> <span class="o">=</span> <span class="n">df_per_col</span><span class="p">[</span><span class="n">df_per_col</span><span class="o">.</span><span class="n">notnull</span><span class="p">()]</span>
+        <span class="n">types_per_col</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">api</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">infer_dtype</span><span class="p">(</span><span class="n">df_per_col2</span><span class="p">)</span>
+
+        <span class="n">is_strnum</span> <span class="o">=</span> <span class="n">_is_strnum_column</span><span class="p">(</span><span class="n">df</span><span class="p">[</span><span class="n">df_col</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="n">types_per_col</span> <span class="o">==</span> <span class="s2">&quot;mixed&quot;</span> <span class="ow">or</span> <span class="n">types_per_col</span> <span class="o">==</span> <span class="s2">&quot;mixed-integer&quot;</span> <span class="ow">or</span> <span class="p">(</span><span class="n">types_per_col</span> <span class="o">==</span> <span class="s2">&quot;string&quot;</span> <span class="ow">and</span> <span class="n">is_strnum</span><span class="p">):</span>
+            <span class="n">mixed_df_cols</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">df_col</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">mixed_df_cols</span>
+
+
+<span class="k">def</span> <span class="nf">_is_date_column</span><span class="p">(</span><span class="n">c</span><span class="p">):</span>
+    <span class="n">c2</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">c</span><span class="o">.</span><span class="n">notnull</span><span class="p">()]</span>
+    <span class="k">if</span> <span class="n">c2</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">1000</span><span class="p">:</span>
+        <span class="n">c2</span> <span class="o">=</span> <span class="n">c2</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="mi">1000</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="mi">17</span><span class="p">)</span>
+    <span class="k">with</span> <span class="n">warnings</span><span class="o">.</span><span class="n">catch_warnings</span><span class="p">():</span>
+        <span class="n">warnings</span><span class="o">.</span><span class="n">simplefilter</span><span class="p">(</span><span class="s2">&quot;ignore&quot;</span><span class="p">)</span>
+        <span class="n">c2</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">to_datetime</span><span class="p">(</span><span class="n">c2</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s2">&quot;coerce&quot;</span><span class="p">)</span>
+    <span class="n">ratio</span> <span class="o">=</span> <span class="n">c2</span><span class="o">.</span><span class="n">notnull</span><span class="p">()</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">/</span> <span class="n">c2</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">ratio</span> <span class="o">&gt;</span> <span class="mf">0.8</span>
+
+
+<div class="viewcode-block" id="CancellationToken">
+<a class="viewcode-back" href="../../sapientml.html#sapientml.params.CancellationToken">[docs]</a>
+<span class="k">class</span> <span class="nc">CancellationToken</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;CancellationToken class.</span>
+
+<span class="sd">    Attributes</span>
+<span class="sd">    ----------</span>
+<span class="sd">    is_triggered : bool</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">is_triggered</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span></div>
+
+
+
+<div class="viewcode-block" id="Code">
+<a class="viewcode-back" href="../../sapientml.html#sapientml.params.Code">[docs]</a>
+<span class="k">class</span> <span class="nc">Code</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Code class.</span>
+
+<span class="sd">    Attributes</span>
+<span class="sd">    ----------</span>
+<span class="sd">    validation : str</span>
+<span class="sd">    test : str</span>
+<span class="sd">    train : str</span>
+<span class="sd">    predict : str</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">validation</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="n">test</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="n">train</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="n">predict</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__add__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">Code</span><span class="p">(</span>
+            <span class="n">validation</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">validation</span> <span class="o">+</span> <span class="n">other</span><span class="o">.</span><span class="n">validation</span><span class="p">,</span>
+            <span class="n">test</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">test</span> <span class="o">+</span> <span class="n">other</span><span class="o">.</span><span class="n">test</span><span class="p">,</span>
+            <span class="n">train</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">train</span> <span class="o">+</span> <span class="n">other</span><span class="o">.</span><span class="n">train</span><span class="p">,</span>
+            <span class="n">predict</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">predict</span> <span class="o">+</span> <span class="n">other</span><span class="o">.</span><span class="n">predict</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="RunningResult">
+<a class="viewcode-back" href="../../sapientml.html#sapientml.params.RunningResult">[docs]</a>
+<span class="k">class</span> <span class="nc">RunningResult</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;RunningResult class.</span>
+
+<span class="sd">    Attributes</span>
+<span class="sd">    ----------</span>
+<span class="sd">    output : str</span>
+<span class="sd">    error : str</span>
+<span class="sd">    returncode : int</span>
+<span class="sd">    time : int</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">output</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">error</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">returncode</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">time</span><span class="p">:</span> <span class="nb">int</span></div>
+
+
+
+<div class="viewcode-block" id="PipelineResult">
+<a class="viewcode-back" href="../../sapientml.html#sapientml.params.PipelineResult">[docs]</a>
+<span class="k">class</span> <span class="nc">PipelineResult</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;PipelineResult class.</span>
+
+<span class="sd">    Attributes</span>
+<span class="sd">    ----------</span>
+<span class="sd">    score : float, optional</span>
+<span class="sd">    metric : str, optional</span>
+<span class="sd">    best_params : dict, optional</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">score</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span>
+    <span class="n">metric</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+    <span class="n">best_params</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">dict</span><span class="p">]</span></div>
+
+
+
+<div class="viewcode-block" id="Task">
+<a class="viewcode-back" href="../../sapientml.html#sapientml.params.Task">[docs]</a>
+<span class="k">class</span> <span class="nc">Task</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Task class.</span>
+
+<span class="sd">    Attributes</span>
+<span class="sd">    ----------</span>
+<span class="sd">    target_columns : list[str]</span>
+<span class="sd">        Names of target columns</span>
+<span class="sd">    task_type : &#39;classification&#39; or &#39;regression&#39;</span>
+<span class="sd">        Specify classification or regression.</span>
+<span class="sd">    ignore_columns: list[str]</span>
+<span class="sd">        list of columns which are not necessary or ignored.</span>
+<span class="sd">    split_method : &#39;random&#39;, &#39;time&#39;, or &#39;group&#39;</span>
+<span class="sd">        Method of train-test split.</span>
+<span class="sd">        &#39;random&#39; uses random split.</span>
+<span class="sd">        &#39;time&#39; requires &#39;split_column_name&#39;.</span>
+<span class="sd">        This sorts the data rows based on the column, and then splits data.</span>
+<span class="sd">        &#39;group&#39; requires &#39;split_column_name&#39;.</span>
+<span class="sd">        This split the data so as not to split rows with the same value of &#39;split_column_name&#39;</span>
+<span class="sd">        into train and test data.</span>
+<span class="sd">        Currently, this option is not valid in the hyperparameter tuning.</span>
+<span class="sd">        Don&#39;t set time or group when hyperparameter_tuning=True.</span>
+<span class="sd">    split_seed : int</span>
+<span class="sd">        Random seed for train-test split.</span>
+<span class="sd">        Ignored when split_method=&#39;time&#39;.</span>
+<span class="sd">    split_train_size : float</span>
+<span class="sd">        The ratio of training size to input data.</span>
+<span class="sd">        Ignored when split_method=&#39;time&#39;.</span>
+<span class="sd">    split_column_name : str</span>
+<span class="sd">        Name of the column used to split.</span>
+<span class="sd">        Ignored when split_method=&#39;random&#39;</span>
+<span class="sd">    time_split_num : int</span>
+<span class="sd">        Passed to TimeSeriesSplit&#39;s n_splits.</span>
+<span class="sd">        Valid only when split_method=&#39;time&#39;.</span>
+<span class="sd">    time_split_index : int</span>
+<span class="sd">        The index of the split from TimeSeriesSplit.</span>
+<span class="sd">        Valid only when split_method=&#39;time&#39;.</span>
+<span class="sd">    adaptation_metric : str</span>
+<span class="sd">        Metric for evaluation.</span>
+<span class="sd">        Classification: &#39;f1&#39;, &#39;auc&#39;, &#39;ROC_AUC&#39;, &#39;accuracy&#39;, &#39;Gini&#39;, &#39;LogLoss&#39;,</span>
+<span class="sd">        &#39;MCC&#39;(Matthews correlation coefficient), &#39;QWK&#39;(Quadratic weighted kappa).</span>
+<span class="sd">        Regression: &#39;r2&#39;, &#39;RMSLE&#39;, &#39;RMSE&#39;, &#39;MAE&#39;.</span>
+<span class="sd">    is_multiclass: bool</span>
+<span class="sd">        To check whether it is a multiclass or not.</span>
+<span class="sd">    split_stratification : bool</span>
+<span class="sd">        To perform stratification in train-test split.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">target_columns</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+    <span class="n">task_type</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;classification&quot;</span><span class="p">,</span> <span class="s2">&quot;regression&quot;</span><span class="p">]]</span>
+    <span class="n">split_method</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;random&quot;</span><span class="p">,</span> <span class="s2">&quot;time&quot;</span><span class="p">,</span> <span class="s2">&quot;group&quot;</span><span class="p">]</span>
+    <span class="n">split_seed</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">split_train_size</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">split_column_name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+    <span class="n">time_split_num</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">time_split_index</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">adaptation_metric</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+    <span class="n">is_multiclass</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">split_stratification</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">bool</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="nd">@field_validator</span><span class="p">(</span><span class="s2">&quot;target_columns&quot;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">_check_num_of_column_names</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">v</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">v</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">v</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">v</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="k">else</span> <span class="n">v</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">MAX_NUM_OF_COLUMNS</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;The number of columns must be smaller than </span><span class="si">{</span><span class="n">MAX_NUM_OF_COLUMNS</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">v</span>
+
+    <span class="nd">@field_validator</span><span class="p">(</span><span class="s2">&quot;target_columns&quot;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">_check_columns_is_not_empty</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">v</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">v</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">v</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Target columns are empty.&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">v</span>
+
+    <span class="nd">@field_validator</span><span class="p">(</span><span class="s2">&quot;target_columns&quot;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">_check_column_name_length</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">v</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">v</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">v</span>
+        <span class="k">for</span> <span class="n">_v</span> <span class="ow">in</span> <span class="n">v</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="k">else</span> <span class="n">v</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">_v</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">MAX_COLUMN_NAME_LENGTH</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Column name length must be shorter than </span><span class="si">{</span><span class="n">MAX_COLUMN_NAME_LENGTH</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">v</span>
+
+    <span class="nd">@field_validator</span><span class="p">(</span><span class="s2">&quot;split_seed&quot;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">_check_seed</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">v</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">v</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">MAX_SEED</span> <span class="o">&lt;</span> <span class="n">v</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">v</span><span class="si">}</span><span class="s2"> is out of [0, </span><span class="si">{</span><span class="n">MAX_SEED</span><span class="si">}</span><span class="s2">]&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">v</span>
+
+    <span class="nd">@field_validator</span><span class="p">(</span><span class="s2">&quot;split_train_size&quot;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">_check_split_train_size</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">v</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">v</span> <span class="o">&lt;=</span> <span class="mi">0</span> <span class="ow">or</span> <span class="mi">1</span> <span class="o">&lt;=</span> <span class="n">v</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">v</span><span class="si">}</span><span class="s2"> is out of (0, 1)&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">v</span>
+
+    <span class="nd">@field_validator</span><span class="p">(</span><span class="s2">&quot;split_column_name&quot;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">_check_split_column_name</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">v</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">v</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">MAX_COLUMN_NAME_LENGTH</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Column name length must be shorter than </span><span class="si">{</span><span class="n">MAX_COLUMN_NAME_LENGTH</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">v</span>
+
+    <span class="nd">@field_validator</span><span class="p">(</span><span class="s2">&quot;time_split_num&quot;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">_check_time_split_num</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">v</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">v</span> <span class="o">&lt;</span> <span class="mi">1</span> <span class="ow">or</span> <span class="n">MAX_TIME_SPLIT_NUM</span> <span class="o">&lt;</span> <span class="n">v</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">v</span><span class="si">}</span><span class="s2"> is out of [1, </span><span class="si">{</span><span class="n">MAX_TIME_SPLIT_NUM</span><span class="si">}</span><span class="s2">]&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">v</span>
+
+    <span class="nd">@field_validator</span><span class="p">(</span><span class="s2">&quot;time_split_index&quot;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">_check_time_split_index</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">v</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">v</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">MAX_TIME_SPLIT_INDEX</span> <span class="o">&lt;</span> <span class="n">v</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">v</span><span class="si">}</span><span class="s2"> is out of [1, </span><span class="si">{</span><span class="n">MAX_TIME_SPLIT_INDEX</span><span class="si">}</span><span class="s2">].&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">v</span>
+
+    <span class="nd">@field_validator</span><span class="p">(</span><span class="s2">&quot;adaptation_metric&quot;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">_check_metric</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">v</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">v</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">v</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">Metric</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">NotImplementedError</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&#39;</span><span class="si">{</span><span class="n">v</span><span class="si">}</span><span class="s2">&#39; is invalid as a metric.&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">v</span></div>
+
+
+
+<div class="viewcode-block" id="Config">
+<a class="viewcode-back" href="../../sapientml.html#sapientml.params.Config">[docs]</a>
+<span class="k">class</span> <span class="nc">Config</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Config class.</span>
+
+<span class="sd">    Attributes</span>
+<span class="sd">    ----------</span>
+<span class="sd">    initial_timeout : int</span>
+<span class="sd">        Timelimit to execute each generated script.</span>
+<span class="sd">        Ignored when hyperparameter_tuning=True and hyperparameter_tuning_timeout is set.</span>
+<span class="sd">    timeout_for_test : int</span>
+<span class="sd">        Timelimit to execute test script (final_script) and Visualization.</span>
+<span class="sd">    cancel : CancellationToken, optional</span>
+<span class="sd">        Object to interrupt evaluations.</span>
+<span class="sd">    project_name : str, optional</span>
+<span class="sd">        Project name.</span>
+<span class="sd">    debug : bool</span>
+<span class="sd">        Debug mode or not.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">initial_timeout</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">INITIAL_TIMEOUT</span>
+    <span class="n">timeout_for_test</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">cancel</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">CancellationToken</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">project_name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">debug</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span></div>
+
+
+
+<div class="viewcode-block" id="Dataset">
+<a class="viewcode-back" href="../../sapientml.html#sapientml.params.Dataset">[docs]</a>
+<span class="k">class</span> <span class="nc">Dataset</span><span class="p">:</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">training_data</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span>
+        <span class="n">validation_data</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">test_data</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">csv_encoding</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;UTF-8&quot;</span><span class="p">,</span> <span class="s2">&quot;SJIS&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;UTF-8&quot;</span><span class="p">,</span>
+        <span class="n">csv_delimiter</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;,&quot;</span><span class="p">,</span>
+        <span class="n">save_datasets_format</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;csv&quot;</span><span class="p">,</span> <span class="s2">&quot;pickle&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;pickle&quot;</span><span class="p">,</span>
+        <span class="n">ignore_columns</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">output_dir</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">DEFAULT_OUTPUT_DIR</span><span class="p">),</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Checking/Preparing the dataset.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        training_data: pandas.DataFrame or str</span>
+<span class="sd">            Training dataframe.</span>
+<span class="sd">            When str, this is regarded as a file path.</span>
+<span class="sd">        validation_data: pandas.DataFrame, str or None</span>
+<span class="sd">            Validation dataframe.</span>
+<span class="sd">            When str, this is regarded as file paths.</span>
+<span class="sd">            When None, validation data is extracted from training data by split.</span>
+<span class="sd">        test_data: pandas.DataFrame, str, or None</span>
+<span class="sd">            Test dataframes.</span>
+<span class="sd">            When str, they are regarded as file paths.</span>
+<span class="sd">            When None, test data is extracted from training data by split.</span>
+<span class="sd">        csv_encoding: &#39;UTF-8&#39; or &#39;SJIS&#39;</span>
+<span class="sd">            Encoding method when csv files are involved.</span>
+<span class="sd">            Ignored when only pickle files are involved.</span>
+<span class="sd">        csv_delimiter: str</span>
+<span class="sd">            Delimiter to read csv files</span>
+<span class="sd">        save_datasets_format: &#39;csv&#39; or &#39;pickle&#39;</span>
+<span class="sd">            Data format when the input dataframes are written to files.</span>
+<span class="sd">            Ignored when all inputs are specified as file path.</span>
+<span class="sd">        ignore_columns: list[str]</span>
+<span class="sd">            Column names which must not be used and must be dropped.</span>
+<span class="sd">        output_dir: str</span>
+<span class="sd">            Output dir</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ignore_columns</span> <span class="o">=</span> <span class="p">[]</span> <span class="k">if</span> <span class="n">ignore_columns</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">ignore_columns</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">csv_encoding</span> <span class="o">=</span> <span class="n">csv_encoding</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">csv_delimiter</span> <span class="o">=</span> <span class="n">csv_delimiter</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">save_datasets_format</span> <span class="o">=</span> <span class="n">save_datasets_format</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_dir</span> <span class="o">=</span> <span class="n">output_dir</span>
+
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">training_data</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">training_dataframe</span> <span class="o">=</span> <span class="n">_read_file</span><span class="p">(</span><span class="n">training_data</span><span class="p">,</span> <span class="n">csv_encoding</span><span class="p">,</span> <span class="n">csv_delimiter</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">training_data_path</span> <span class="o">=</span> <span class="n">training_data</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">training_data</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">training_dataframe</span> <span class="o">=</span> <span class="n">training_data</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+            <span class="n">filename</span> <span class="o">=</span> <span class="s2">&quot;training.&quot;</span> <span class="o">+</span> <span class="p">(</span><span class="s2">&quot;pkl&quot;</span> <span class="k">if</span> <span class="n">save_datasets_format</span> <span class="o">==</span> <span class="s2">&quot;pickle&quot;</span> <span class="k">else</span> <span class="s2">&quot;csv&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">training_data_path</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">output_dir</span> <span class="o">/</span> <span class="n">filename</span><span class="p">)</span>
+            <span class="n">save_file</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">training_dataframe</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">training_data_path</span><span class="p">,</span> <span class="n">csv_encoding</span><span class="p">,</span> <span class="n">csv_delimiter</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">training_data_path</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">training_data_path</span><span class="p">)</span><span class="o">.</span><span class="n">relative_to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">output_dir</span><span class="p">))</span>
+
+        <span class="c1"># NOTE: self.validation_data and self.test_data can be None</span>
+        <span class="k">if</span> <span class="n">validation_data</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">test_data</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;test_data must not be None when validation_data is specified. test_data should be specified instead of validation_data.&quot;</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">validation_data</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">validation_dataframe</span> <span class="o">=</span> <span class="n">_read_file</span><span class="p">(</span><span class="n">validation_data</span><span class="p">,</span> <span class="n">csv_encoding</span><span class="p">,</span> <span class="n">csv_delimiter</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">validation_data_path</span> <span class="o">=</span> <span class="n">validation_data</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">validation_data</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">validation_dataframe</span> <span class="o">=</span> <span class="n">validation_data</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+            <span class="n">filename</span> <span class="o">=</span> <span class="s2">&quot;validation.&quot;</span> <span class="o">+</span> <span class="p">(</span><span class="s2">&quot;pkl&quot;</span> <span class="k">if</span> <span class="n">save_datasets_format</span> <span class="o">==</span> <span class="s2">&quot;pickle&quot;</span> <span class="k">else</span> <span class="s2">&quot;csv&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">validation_data_path</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">output_dir</span> <span class="o">/</span> <span class="n">filename</span><span class="p">)</span>
+            <span class="n">save_file</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">validation_dataframe</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">validation_data_path</span><span class="p">,</span> <span class="n">csv_encoding</span><span class="p">,</span> <span class="n">csv_delimiter</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">validation_data_path</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">validation_data_path</span><span class="p">)</span><span class="o">.</span><span class="n">relative_to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">output_dir</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">validation_dataframe</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">validation_data_path</span> <span class="o">=</span> <span class="kc">None</span>
+
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">test_data</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">test_dataframe</span> <span class="o">=</span> <span class="n">_read_file</span><span class="p">(</span><span class="n">test_data</span><span class="p">,</span> <span class="n">csv_encoding</span><span class="p">,</span> <span class="n">csv_delimiter</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">test_data_path</span> <span class="o">=</span> <span class="n">test_data</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">test_data</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">test_dataframe</span> <span class="o">=</span> <span class="n">test_data</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+            <span class="n">filename</span> <span class="o">=</span> <span class="s2">&quot;test.&quot;</span> <span class="o">+</span> <span class="p">(</span><span class="s2">&quot;pkl&quot;</span> <span class="k">if</span> <span class="n">save_datasets_format</span> <span class="o">==</span> <span class="s2">&quot;pickle&quot;</span> <span class="k">else</span> <span class="s2">&quot;csv&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">test_data_path</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">output_dir</span> <span class="o">/</span> <span class="n">filename</span><span class="p">)</span>
+            <span class="n">save_file</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">test_dataframe</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">test_data_path</span><span class="p">,</span> <span class="n">csv_encoding</span><span class="p">,</span> <span class="n">csv_delimiter</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">test_data_path</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">test_data_path</span><span class="p">)</span><span class="o">.</span><span class="n">relative_to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">output_dir</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">test_dataframe</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">test_data_path</span> <span class="o">=</span> <span class="kc">None</span>
+
+<div class="viewcode-block" id="Dataset.reload">
+<a class="viewcode-back" href="../../sapientml.html#sapientml.params.Dataset.reload">[docs]</a>
+    <span class="k">def</span> <span class="nf">reload</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">training_dataframe</span> <span class="o">=</span> <span class="n">_read_file</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">training_data_path</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">csv_encoding</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">csv_delimiter</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">validation_dataframe</span> <span class="o">=</span> <span class="n">_read_file</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">validation_data_path</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">csv_encoding</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">csv_delimiter</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">test_dataframe</span> <span class="o">=</span> <span class="n">_read_file</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">test_data_path</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">csv_encoding</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">csv_delimiter</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Dataset.check_dataframes">
+<a class="viewcode-back" href="../../sapientml.html#sapientml.params.Dataset.check_dataframes">[docs]</a>
+    <span class="k">def</span> <span class="nf">check_dataframes</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">target_columns</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Checking dataframes method.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        target_columns : List[str]</span>
+<span class="sd">            Names of target columns.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># 1. Check status of each dataframe</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_single_dataframe</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">training_dataframe</span><span class="p">,</span> <span class="n">target_columns</span><span class="p">,</span> <span class="s2">&quot;train&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">validation_dataframe</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_check_single_dataframe</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">validation_dataframe</span><span class="p">,</span> <span class="n">target_columns</span><span class="p">,</span> <span class="s2">&quot;validation&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">test_dataframe</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_check_single_dataframe</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">test_dataframe</span><span class="p">,</span> <span class="n">target_columns</span><span class="p">,</span> <span class="s2">&quot;test&quot;</span><span class="p">)</span>
+
+        <span class="k">def</span> <span class="nf">format_warning</span><span class="p">(</span><span class="n">inconsistent_df_cols</span><span class="p">,</span> <span class="n">target_data_name1</span><span class="p">,</span> <span class="n">target_data_name2</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">inconsistent_df_col</span> <span class="ow">in</span> <span class="n">inconsistent_df_cols</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;types of </span><span class="si">{</span><span class="n">inconsistent_df_col</span><span class="si">}</span><span class="s2"> are inconsistent between </span><span class="si">{</span><span class="n">target_data_name1</span><span class="si">}</span><span class="s2"> and </span><span class="si">{</span><span class="n">target_data_name2</span><span class="si">}</span><span class="s2"> dataframes.&quot;</span>
+                <span class="p">)</span>
+
+        <span class="c1"># 2. Check whether column names and orders are consistency between two dataframes</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">validation_dataframe</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_same</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">training_dataframe</span><span class="o">.</span><span class="n">drop</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ignore_columns</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s2">&quot;ignore&quot;</span><span class="p">),</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">validation_dataframe</span><span class="o">.</span><span class="n">drop</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ignore_columns</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s2">&quot;ignore&quot;</span><span class="p">),</span>
+            <span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="s2">&quot;Train/validation dataframes have different column names or its order. It must be same among the dataframes.&quot;</span>
+                <span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">test_dataframe</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_same</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">training_dataframe</span><span class="o">.</span><span class="n">drop</span><span class="p">(</span><span class="n">target_columns</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">drop</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ignore_columns</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s2">&quot;ignore&quot;</span><span class="p">),</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">test_dataframe</span><span class="o">.</span><span class="n">drop</span><span class="p">(</span><span class="n">target_columns</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s2">&quot;ignore&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">drop</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">ignore_columns</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s2">&quot;ignore&quot;</span>
+                <span class="p">),</span>
+            <span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="s2">&quot;Train/test dataframes have different column names or its order. It must be same among the dataframes.&quot;</span>
+                <span class="p">)</span>
+
+        <span class="c1"># 3. Check whether types are consistency between two dataframes</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">validation_dataframe</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">format_warning</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_confirm_consistent_type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">training_dataframe</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">validation_dataframe</span><span class="p">),</span>
+                <span class="s2">&quot;train&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;validation&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">test_dataframe</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">format_warning</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_confirm_consistent_type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">training_dataframe</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">test_dataframe</span><span class="p">),</span>
+                <span class="s2">&quot;train&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;test&quot;</span><span class="p">,</span>
+            <span class="p">)</span></div>
+
+
+    <span class="k">def</span> <span class="nf">_check_single_dataframe</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">target_columns</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">target_data_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="c1"># 0. Target existence</span>
+        <span class="c1"># test data doesn&#39;t have to have target columns because there is the case where only prediction is needed.</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">target_data_name</span> <span class="o">!=</span> <span class="s2">&quot;test&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="ow">not</span> <span class="nb">set</span><span class="p">(</span><span class="n">target_columns</span><span class="p">)</span><span class="o">.</span><span class="n">issubset</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">))):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">target_data_name</span><span class="si">}</span><span class="s2"> doesn&#39;t have target columns&quot;</span><span class="p">)</span>
+
+        <span class="c1"># 1. Check NaN in target column</span>
+        <span class="k">if</span> <span class="nb">set</span><span class="p">(</span><span class="n">target_columns</span><span class="p">)</span><span class="o">.</span><span class="n">issubset</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">))</span> <span class="ow">and</span> <span class="p">(</span><span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_isnot_nan</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="n">target_columns</span><span class="p">)):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;target column of </span><span class="si">{</span><span class="n">target_data_name</span><span class="si">}</span><span class="s2"> dataframe has NaN or Inf.&quot;</span><span class="p">)</span>
+
+        <span class="c1"># 2. Check whether index names are unique</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_index_unique</span><span class="p">(</span><span class="n">df</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Index names of </span><span class="si">{</span><span class="n">target_data_name</span><span class="si">}</span><span class="s2"> dataframe are not unique.&quot;</span><span class="p">)</span>
+
+        <span class="c1"># 3. Check whether column names are unique</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_columns_unique</span><span class="p">(</span><span class="n">df</span><span class="p">):</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Column names of </span><span class="si">{</span><span class="n">target_data_name</span><span class="si">}</span><span class="s2"> dataframe are not unique.&quot;</span><span class="p">)</span>
+
+        <span class="c1"># 4. Check strnum mixed type</span>
+        <span class="n">mixed_df_cols</span> <span class="o">=</span> <span class="n">_confirm_mixed_type</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">mixed_df_col</span> <span class="ow">in</span> <span class="n">mixed_df_cols</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">mixed_df_col</span><span class="si">}</span><span class="s2"> would have mixed type in </span><span class="si">{</span><span class="n">target_data_name</span><span class="si">}</span><span class="s2"> dataframe.&quot;</span><span class="p">)</span>
+
+        <span class="c1"># 5. Check whether datetime columns are correct value</span>
+        <span class="n">incorrect_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_confirm_date_type</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
+        <span class="n">incorrect_cols</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">incorrect_info</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+        <span class="n">incorrect_summary</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">num_shown_for_one_column</span> <span class="o">=</span> <span class="mi">3</span>
+        <span class="k">for</span> <span class="n">col</span><span class="p">,</span> <span class="n">dt_column</span> <span class="ow">in</span> <span class="n">incorrect_info</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">dt_column</span><span class="o">.</span><span class="n">iloc</span><span class="p">[:</span><span class="n">num_shown_for_one_column</span><span class="p">]</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="n">incorrect_summary</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">col</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">value</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">incorrect_summary</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;The follwing columns would have incorrect datetime values in </span><span class="si">{</span><span class="n">target_data_name</span><span class="si">}</span><span class="s2"> dataframe: </span><span class="si">{</span><span class="n">incorrect_cols</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;For example, (column_name, index, value) = </span><span class="si">{</span><span class="n">incorrect_summary</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="kc">True</span>
+
+    <span class="k">def</span> <span class="nf">_isnot_nan</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">target_columns</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">target_column</span> <span class="ow">in</span> <span class="n">target_columns</span><span class="p">:</span>
+            <span class="n">target_data</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="n">target_column</span><span class="p">]</span><span class="o">.</span><span class="n">replace</span><span class="p">([</span><span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">target_data</span><span class="o">.</span><span class="n">isna</span><span class="p">()</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
+                <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="kc">True</span>
+
+    <span class="k">def</span> <span class="nf">_is_columns_unique</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="o">.</span><span class="n">is_unique</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="kc">False</span>
+
+    <span class="k">def</span> <span class="nf">_is_index_unique</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">df</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">is_unique</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="kc">False</span>
+
+    <span class="k">def</span> <span class="nf">_confirm_consistent_type</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">df1</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">df2</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="n">inconsistent_df_cols</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">df1_col</span> <span class="ow">in</span> <span class="n">df1</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+            <span class="n">df1_col_type</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">api</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">infer_dtype</span><span class="p">(</span><span class="n">df1</span><span class="p">[</span><span class="n">df1_col</span><span class="p">],</span> <span class="n">skipna</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">df1_col</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">df2</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">df2_col_type</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">api</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">infer_dtype</span><span class="p">(</span><span class="n">df2</span><span class="p">[</span><span class="n">df1_col</span><span class="p">],</span> <span class="n">skipna</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">df1_col_type</span> <span class="o">!=</span> <span class="n">df2_col_type</span><span class="p">:</span>
+                <span class="n">inconsistent_df_cols</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">df1_col</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">inconsistent_df_cols</span>
+
+    <span class="k">def</span> <span class="nf">_confirm_date_type</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+        <span class="n">incorrect_info</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="c1"># If only _is_date_column, all integer columns can be date columns.</span>
+        <span class="n">object_columns</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">select_dtypes</span><span class="p">(</span><span class="s2">&quot;object&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">columns</span>
+        <span class="n">date_col</span> <span class="o">=</span> <span class="p">[</span><span class="n">col</span> <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">object_columns</span> <span class="k">if</span> <span class="n">_is_date_column</span><span class="p">(</span><span class="n">df</span><span class="p">[</span><span class="n">col</span><span class="p">])]</span>
+        <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">date_col</span><span class="p">:</span>
+            <span class="n">org_column</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">df</span><span class="p">[</span><span class="n">col</span><span class="p">]</span><span class="o">.</span><span class="n">notnull</span><span class="p">(),</span> <span class="n">col</span><span class="p">]</span>
+            <span class="n">dt_column</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">to_datetime</span><span class="p">(</span><span class="n">org_column</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s2">&quot;coerce&quot;</span><span class="p">)</span>
+            <span class="n">incorrect_values</span> <span class="o">=</span> <span class="n">org_column</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">dt_column</span><span class="o">.</span><span class="n">isnull</span><span class="p">()]</span>
+            <span class="k">if</span> <span class="n">incorrect_values</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">incorrect_info</span><span class="p">[</span><span class="n">col</span><span class="p">]</span> <span class="o">=</span> <span class="n">incorrect_values</span>
+        <span class="k">return</span> <span class="n">incorrect_info</span>
+
+    <span class="k">def</span> <span class="nf">_is_same</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">df1</span><span class="p">,</span> <span class="n">df2</span><span class="p">):</span>
+        <span class="n">df1_columns</span> <span class="o">=</span> <span class="n">df1</span><span class="o">.</span><span class="n">columns</span>
+        <span class="n">df2_columns</span> <span class="o">=</span> <span class="n">df2</span><span class="o">.</span><span class="n">columns</span>
+
+        <span class="c1"># The length of columns must be same</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">df1_columns</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">df2_columns</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">False</span>
+
+        <span class="c1"># The item and order of columns must be same</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">df1_columns</span><span class="p">)):</span>
+            <span class="k">if</span> <span class="n">df1_columns</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">!=</span> <span class="n">df2_columns</span><span class="p">[</span><span class="n">i</span><span class="p">]:</span>
+                <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="kc">True</span>
+
+<div class="viewcode-block" id="Dataset.get_dataframes">
+<a class="viewcode-back" href="../../sapientml.html#sapientml.params.Dataset.get_dataframes">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_dataframes</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">],</span> <span class="n">Optional</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;get_dataframes method.</span>
+
+<span class="sd">        Results</span>
+<span class="sd">        ----------</span>
+<span class="sd">        tuple</span>
+<span class="sd">            returns traning, validation, test dataframes in tuple format.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">training_dataframe</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">validation_dataframe</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">test_dataframe</span><span class="p">)</span></div>
+</div>
+
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">sapientml</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../configtest.html">configtest module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../run.html">run module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../run2.html">run2 module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../sapientml.html">sapientml package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tests.html">tests package</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2023, Author.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 7.2.5</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.13</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>
