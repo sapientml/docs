@@ -10,11 +10,8 @@ Welcome to sapientml's documentation!
    :maxdepth: 4
    :caption: Contents:
 
-   configtest
-   run
-   run2
    sapientml
-   tests
+   sapientml_plugins
 
 
 Indices and tables
