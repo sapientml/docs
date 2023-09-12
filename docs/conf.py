@@ -25,6 +25,7 @@ extensions = [
     'sphinx_rtd_theme', 
     'sphinx_fontawesome', 
     'myst_parser', 
+    'sphinxcontrib.autodoc_pydantic',
 ]
 
 templates_path = ['_templates']
@@ -44,3 +45,8 @@ html_static_path = ['_static']
 # https://www.sphinx-doc.org/en/master/usage/extensions/todo.html#configuration
 
 todo_include_todos = True
+
+autoclass_content = "both"
+
+autodoc_pydantic_model_show_json = True
+autodoc_pydantic_settings_show_json = False

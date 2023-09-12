@@ -1,40 +1,24 @@
 SapientML API
 =================
 
-.. automodule:: sapientml
-   :show-inheritance:
-   .. autoclass:: SapientML
-      :members:
-   .. autoclass:: GeneratedModel
-      :members:
-   .. autoclass:: Config
-      :members:
-   .. autoclass:: Task
-      :members:
-   .. autoclass:: Dataset
-      :members:
-
-
-Core plugin
------------------
-
-.. automodule:: sapientml_core
+.. autoclass:: sapientml.SapientML
    :members:
-   :undoc-members:
-   :show-inheritance:
-
-Preprocess plugin
------------------
-
-.. automodule:: sapientml_preprocess
+.. autoclass:: sapientml.GeneratedModel
    :members:
-   :undoc-members:
-   :show-inheritance:
 
-LoadData plugin
------------------
+Config parameters
+=================
 
-.. automodule:: sapientml_loaddata
+.. autoclass:: sapientml.Config
    :members:
-   :undoc-members:
-   :show-inheritance:
+   :exclude-members: model_fields, model_config
+
+.. autoclass:: sapientml_core.SapientMLConfig
+   :members:
+   :exclude-members: model_fields, model_config
+
+.. autoclass:: sapientml_preprocess.PreprocessConfig
+   :members:
+   :exclude-members: model_fields, model_config
+
+   

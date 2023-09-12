@@ -11,7 +11,6 @@ Welcome to sapientml's documentation!
    :caption: Contents:
 
    sapientml
-   plugins
 
 
 Indices and tables
