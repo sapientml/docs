@@ -1,5 +1,9 @@
-SapientML API
-=================
+===
+API
+===
+
+Main class
+-----------------
 
 .. autoclass:: sapientml.SapientML
    :members:
@@ -7,7 +11,7 @@ SapientML API
    :members:
 
 Config parameters
-=================
+-----------------
 
 .. autoclass:: sapientml.Config
    :members:

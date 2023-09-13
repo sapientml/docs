@@ -10,8 +10,8 @@ import sphinx_rtd_theme
 import sphinx_fontawesome
 
 project = 'sapientml'
-copyright = '2023, Author'
-author = 'Author'
+copyright = '2023, The SapientML Authors'
+author = 'The SapientML Authors'
 
 version = '0.4.3'
 release = '0.4.3'
@@ -40,6 +40,11 @@ html_theme = 'sphinx_rtd_theme'
 html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 html_show_sourcelink = False
 html_static_path = ['_static']
+html_logo = 'images/SapientML_negative_logo.svg'
+html_theme_options = {
+    'logo_only': True,
+    'display_version': True
+}
 
 # -- Options for todo extension ----------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/extensions/todo.html#configuration
