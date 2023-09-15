@@ -2,7 +2,7 @@
 Installation
 ============
 
-1. Install with pip
+Install with pip
 ===================
 
 **sapientml** needs to be installed just like any other python package
