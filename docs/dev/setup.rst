@@ -5,7 +5,7 @@ Setup
 Creating a development environment in your host
 ===============================================
 
-Python `>=3.9,<3.11` is required.
+Python `>=3.10,<3.11` is required.
 
 .. code-block:: bash
 
