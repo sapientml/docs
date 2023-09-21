@@ -334,9 +334,12 @@ Example:
 4. How to use training output
 =============================
 
-* After **label_orders.json** is produced, it is copied into *core/sapientml_core/adaptation/artifacts/label_order.json* so that SapientML can use it. 
-* Please note that the **dataflow model** is a very important artifact. So make sure that the updated **dataflow model** is correct before replacing the existing one.
-* Generally, it should not be updated unless there is no new pre-processing components.
+* After **label_orders.json** is produced, it is copied into *core/sapientml_core/adaptation/artifacts/label_order.json* so that SapientML can use it. Please note that the **dataflow model** is a very important artifact. So make sure that the updated **dataflow model** is correct before replacing the existing one. Generally, it should not be updated unless there is no new pre-processing components.
+* Replace **models** (*core/sapientml_core/models/*) folder files with the respective files generated in **.cache** file.
+    * Replace **core/sapientml_core/models/feature_importance.json** with **.cache/<tag>/feature_importance.json**.
+    * Replace **core/sapientml_core/models/pp_models.pkl** with **.cache/<tag>/pp_models.pkl**
+    * Replace **core/sapientml_core/models/mp_model_1.pkl** with **.cache/<tag>/mp_model_1.pkl**
+    * Replace **core/sapientml_core/models/mp_model_2.pkl** with **.cache/<tag>/mp_model_2.pkl**
 
 .. _corpus: https://github.com/sapientml/sapientml/files/12593737/sapientml-corpus-0.1.0.zip
 .. _this page: https://github.com/sapientml/docs/edit/main/docs/dev/setup.rst
