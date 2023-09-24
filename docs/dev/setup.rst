@@ -35,7 +35,7 @@ As sapientml and core are interdependent. Use below command to integrate.
 
 .. code-block:: bash
 
-   pip install -e /path/to/AutoML/core/sapientml_core
+   pip install -e /path/to/AutoML/core
    deactivate
 
 Now download `corpus <https://github.com/sapientml/sapientml/files/12593737/sapientml-corpus-0.1.0.zip>`_ inside **sapientml_core**.
