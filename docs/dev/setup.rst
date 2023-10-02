@@ -31,6 +31,12 @@ Setup an environment in the **sapientml** repository folder.
    pip install poetry
    poetry install
 
+For ubuntu, `poetry install` may fail. If so, try the following command:
+
+.. code-block:: bash
+
+   PYTHON_KEYRING_BACKEND="keyring.backends.null.Keyring" poetry install
+
 As sapientml and core are interdependent. Use below command to integrate.
 
 .. code-block:: bash
