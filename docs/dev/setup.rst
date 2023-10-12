@@ -30,6 +30,7 @@ Setup an environment in the **sapientml** repository folder.
    . venv/bin/activate
    pip install poetry
    poetry install
+   pre-commit install
 
 As sapientml and core are interdependent. Use below command to integrate.
 
@@ -42,16 +43,16 @@ Now download `corpus <https://github.com/sapientml/sapientml/files/12593737/sapi
 
 .. code-block:: bash
 
-   $ . venv/bin/activate
-   $ cd /path/to/AutoML/core/sapientml_core
-   $ pip install dvc
-   $ wget https://github.com/sapientml/sapientml/files/12593737/sapientml-corpus-0.1.0.zip
-   $ unzip sapientml-corpus-0.1.0.zip
-   $ mv sapientml-corpus-0.1.0 corpus
-   $ cd corpus
-   $ bash ./scripts/pull.sh
-   $ rm -f sapientml-corpus-0.1.0.zip
-   $ deactivate
+   . venv/bin/activate
+   cd /path/to/AutoML/core/sapientml_core
+   pip install dvc
+   wget https://github.com/sapientml/sapientml/files/12593737/sapientml-corpus-0.1.0.zip
+   unzip sapientml-corpus-0.1.0.zip
+   mv sapientml-corpus-0.1.0 corpus
+   cd corpus
+   bash ./scripts/pull.sh
+   rm -f sapientml-corpus-0.1.0.zip
+   deactivate
 
 After successfull installation, the following directory structure should reflect.
 
