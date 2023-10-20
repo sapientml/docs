@@ -9,7 +9,7 @@ SapientML local training
 1. Execution Method
 ===================
 
-Please refer to `this page <https://github.com/sapientml/docs/edit/main/docs/dev/setup.rst>`_ to finish the setup of development environment first.
+Please refer to :doc:`this page <setup>` to finish the setup of development environment first.
 We assume that at this point, **corpus** is downloaded and stored at the **sapientml_core** location, all the pipelines in the corpus is already clean using program slicing and there exists a label file such as *annotated-notebooks/annotated-notebooks-1140.csv* that has all the components for each pipeline. 
 
 * After successfull setup, the following directory structure should reflect.
