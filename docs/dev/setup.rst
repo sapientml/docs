@@ -5,14 +5,10 @@ Setup
 Creating a development environment in your host
 ===============================================
 
-Python `>=3.10,<3.11` is required.
+Python `>=3.10,<3.13` is required.
 
-.. code-block:: bash
-
-   $ python -V
-   Python 3.10.4
-
-Clone `sapientml <https://github.com/sapientml/sapientml.git>`_ and `core <https://github.com/sapientml/core.git>`_ now.
+Clone `sapientml <https://github.com/sapientml/sapientml.git>`_ and `core <https://github.com/sapientml/core.git>`_.
+If you need to modify `preprocess <https://github.com/sapientml/preprocess.git>`_ and `loaddata <https://github.com/sapientml/loaddata.git>`_, please clone them as well.
 
 .. code-block:: bash
 
@@ -21,16 +17,25 @@ Clone `sapientml <https://github.com/sapientml/sapientml.git>`_ and `core <https
    git clone https://github.com/sapientml/sapientml.git
    git clone https://github.com/sapientml/core.git
 
+   # optional
+   git clone https://github.com/sapientml/preprocess.git
+   git clone https://github.com/sapientml/loaddata.git
+
 Setup an environment in the **sapientml** repository folder.
 
 .. code-block:: bash
 
    cd /path/to/AutoML/sapientml
-   python3.10 -m venv venv
+   python -m venv venv
    . venv/bin/activate
    pip install poetry
    poetry install
    pre-commit install
+   pip install -e ../core
+
+   # optional
+   pip install -e ../preprocess
+   pip install -e ../loaddata
 
 For ubuntu, `poetry install` may fail. If so, try the following command:
 
@@ -45,19 +50,19 @@ As sapientml and core are interdependent. Use below command to integrate.
    pip install -e /path/to/AutoML/core
    deactivate
 
-Now download `corpus <https://github.com/sapientml/sapientml/files/12593737/sapientml-corpus-0.1.0.zip>`_ inside **sapientml_core**.
+Now download `corpus <https://github.com/sapientml/docs/files/13290907/sapientml-corpus-0.1.1.zip>`_ inside **sapientml_core**.
 
 .. code-block:: bash
 
    . venv/bin/activate
    cd /path/to/AutoML/core/sapientml_core
    pip install dvc
-   wget https://github.com/sapientml/sapientml/files/12593737/sapientml-corpus-0.1.0.zip
-   unzip sapientml-corpus-0.1.0.zip
-   mv sapientml-corpus-0.1.0 corpus
+   wget https://github.com/sapientml/docs/files/13290907/sapientml-corpus-0.1.1.zip
+   unzip sapientml-corpus-0.1.1.zip
+   mv sapientml-corpus-0.1.1 corpus
    cd corpus
    bash ./scripts/pull.sh
-   rm -f sapientml-corpus-0.1.0.zip
+   rm -f sapientml-corpus-0.1.1.zip
    deactivate
 
 After successfull installation, the following directory structure should reflect.
@@ -71,12 +76,12 @@ After successfull installation, the following directory structure should reflect
    │       │   ├── clean-notebooks/
    │       │   ├── annotated-notebooks/
    │       │   └── dataset/
-   │       ├── design
-   │       └── training
+   │       ├── design/
+   │       └── training/
    │  
    └── sapientml/
        └──sapientml/
 
 .. _sapientml: https://github.com/sapientml/sapientml.git
 .. _core: https://github.com/sapientml/core.git
-.. _corpus: https://github.com/sapientml/sapientml/files/12593737/sapientml-corpus-0.1.0.zip
+.. _corpus: https://github.com/sapientml/docs/files/13290907/sapientml-corpus-0.1.1.zip
