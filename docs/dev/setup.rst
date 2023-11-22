@@ -50,20 +50,20 @@ As sapientml and core are interdependent. Use below command to integrate.
    pip install -e /path/to/AutoML/core
    deactivate
 
-Now download `corpus <https://github.com/sapientml/sapientml/files/13360498/sapientml-corpus-0.1.2.zip>`_ inside **sapientml_core**.
+Now download `corpus <https://github.com/sapientml/sapientml/files/13432403/sapientml-corpus-0.1.3.zip>`_ inside **sapientml_core**.
 
 .. code-block:: bash
 
    . venv/bin/activate
    cd /path/to/AutoML/core/sapientml_core
    pip install dvc
-   wget https://github.com/sapientml/sapientml/files/13360498/sapientml-corpus-0.1.2.zip
-   unzip sapientml-corpus-0.1.2.zip
-   mv sapientml-corpus-0.1.2 corpus
+   wget https://github.com/sapientml/sapientml/files/13432403/sapientml-corpus-0.1.3.zip
+   unzip sapientml-corpus-0.1.3.zip
+   mv sapientml-corpus-0.1.3 corpus
    cd corpus
    bash ./scripts/pull.sh
-   rm -f sapientml-corpus-0.1.2.zip
-   deactivate
+   rm -f sapientml-corpus-0.1.3.zip
+   deac
 
 After successfull installation, the following directory structure should reflect.
 
@@ -84,4 +84,4 @@ After successfull installation, the following directory structure should reflect
 
 .. _sapientml: https://github.com/sapientml/sapientml.git
 .. _core: https://github.com/sapientml/core.git
-.. _corpus: https://github.com/sapientml/docs/files/13290907/sapientml-corpus-0.1.1.zip
+.. _corpus: https://github.com/sapientml/sapientml/files/13432403/sapientml-corpus-0.1.3.zip
