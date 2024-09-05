@@ -5,7 +5,7 @@ Setup
 Creating a development environment in your host
 ===============================================
 
-Python `>=3.10,<3.13` is required.
+Python `>=3.9,<3.13` is required.
 
 Clone `sapientml <https://github.com/sapientml/sapientml.git>`_ and `core <https://github.com/sapientml/core.git>`_.
 If you need to modify `preprocess <https://github.com/sapientml/preprocess.git>`_ and `loaddata <https://github.com/sapientml/loaddata.git>`_, please clone them as well.
@@ -50,20 +50,20 @@ As sapientml and core are interdependent. Use below command to integrate.
    pip install -e /path/to/AutoML/core
    deactivate
 
-Now download `corpus <https://github.com/sapientml/sapientml/files/13432403/sapientml-corpus-0.1.3.zip>`_ inside **sapientml_core**.
+Now download `corpus <https://github.com/user-attachments/files/16861353/sapientml-corpus-0.1.4.zip>`_ inside **sapientml_core**.
 
 .. code-block:: bash
 
    . venv/bin/activate
    cd /path/to/AutoML/core/sapientml_core
    pip install dvc
-   wget https://github.com/sapientml/sapientml/files/13432403/sapientml-corpus-0.1.3.zip
-   unzip sapientml-corpus-0.1.3.zip
-   mv sapientml-corpus-0.1.3 corpus
+   wget https://github.com/user-attachments/files/16861353/sapientml-corpus-0.1.4.zip
+   unzip sapientml-corpus-0.1.4.zip -d corpus
    cd corpus
    bash ./scripts/pull.sh
-   rm -f sapientml-corpus-0.1.3.zip
-   deac
+   cd ..
+   rm -f sapientml-corpus-0.1.4.zip
+   deactivate
 
 After successfull installation, the following directory structure should reflect.
 
@@ -84,4 +84,4 @@ After successfull installation, the following directory structure should reflect
 
 .. _sapientml: https://github.com/sapientml/sapientml.git
 .. _core: https://github.com/sapientml/core.git
-.. _corpus: https://github.com/sapientml/sapientml/files/13432403/sapientml-corpus-0.1.3.zip
+.. _corpus: https://github.com/user-attachments/files/16861353/sapientml-corpus-0.1.4.zip
